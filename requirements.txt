@@ -1,6 +1,5 @@
-streamlit
+pywebview
 tensorflow
 opencv-python-headless
 Pillow
-pandas
 numpy

@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oak-Wilt Detector</title>
+<style>
+  :root {
+    /* VS Code Light+ */
+    --bg: #f3f3f3; --surface: #ffffff; --fg: #333333; --muted: #6e7681; --border: #e0e0e0;
+    --brand: #007acc; --brand-dark: #005a9e; --brand-soft: #e5f1fa; --btn: #007acc;
+    --red: #e11d2e; --orange: #ee6c00; --amber: #d9a400; --green: #16a34a;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 3px 10px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      /* VS Code Dark+ */
+      --bg: #1e1e1e; --surface: #252526; --fg: #cccccc; --muted: #9d9d9d; --border: #3c3c3c;
+      --brand: #3794ff; --brand-dark: #1177bb; --brand-soft: #04395e; --btn: #0e639c;
+      --red: #ff4d4d; --orange: #ff8a1f; --amber: #ffd21f; --green: #2fd36b;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 3px 10px rgba(0,0,0,.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  svg { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* header */
+  .top { background: #007acc; color: #fff; padding: 1.4rem 2rem; }
+  .top-in { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: 1rem; }
+  .logo { width: 2.8rem; height: 2.8rem; border-radius: 0.8rem; background: rgba(255,255,255,.16); display: grid; place-items: center; }
+  .logo svg { width: 1.6rem; height: 1.6rem; }
+  .top h1 { margin: 0; font-size: 1.35rem; line-height: 1.2; }
+  .top p { margin: 0.15rem 0 0; opacity: .85; font-size: 0.9rem; }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 2rem 4rem; }
+
+  /* buttons */
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .btn { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.5rem 1rem; border-radius: 0.6rem; border: 1px solid var(--border); background: var(--surface); font-weight: 600; transition: .15s; }
+  .btn:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+  .btn.primary { background: var(--btn); border-color: var(--btn); color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn:focus-visible, .chip:focus-visible, .stat:focus-visible, select:focus-visible { outline: 3px solid color-mix(in srgb, var(--brand) 45%, transparent); outline-offset: 2px; }
+
+  /* drop zone */
+  #drop { background: var(--surface); border: 2px dashed var(--border); border-radius: 1rem; padding: 2.2rem 1.5rem; text-align: center; transition: .15s; box-shadow: var(--shadow); }
+  #drop.over { border-color: var(--brand); background: var(--brand-soft); }
+  #drop .ico { width: 3.2rem; height: 3.2rem; margin: 0 auto 0.6rem; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; }
+  #drop .ico svg { width: 1.5rem; height: 1.5rem; }
+  #drop h2 { margin: 0 0 0.2rem; font-size: 1.1rem; }
+  #drop p { margin: 0 0 1rem; color: var(--muted); }
+  #drop.busy .idle { display: none; }
+  .busy-box { display: none; }
+  #drop.busy .busy-box { display: block; }
+  .busy-row { display: flex; justify-content: center; align-items: center; gap: 0.6rem; font-weight: 600; }
+  .spinner { width: 1.1rem; height: 1.1rem; border: 3px solid color-mix(in srgb, var(--muted) 30%, transparent); border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .track { height: 0.5rem; background: var(--border); border-radius: 99px; overflow: hidden; max-width: 460px; margin: 0.8rem auto 0; }
+  .track > div { height: 100%; width: 0; background: var(--brand); transition: width .2s; }
+
+  .msg { border-radius: 0.7rem; padding: 0.75rem 1rem; margin-top: 1rem; border: 1px solid; }
+  .msg.error { background: color-mix(in srgb, var(--red) 10%, var(--surface)); border-color: var(--red); }
+  .msg.warn { background: color-mix(in srgb, var(--amber) 12%, var(--surface)); border-color: var(--amber); }
+
+  /* summary */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.8rem; margin: 1.5rem 0 1rem; }
+  .stat { text-align: left; background: var(--surface); border: 1px solid var(--border); border-left: 5px solid var(--c); border-radius: 0.8rem; padding: 0.8rem 1rem; box-shadow: var(--shadow); transition: .15s; }
+  .stat:hover { transform: translateY(-2px); }
+  .stat.active { outline: 2px solid var(--c); }
+  .stat b { display: block; font-size: 1.8rem; line-height: 1.1; }
+  .stat span { display: block; font-size: 0.78rem; font-weight: 700; letter-spacing: .02em; }
+  .stat small { color: var(--muted); }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+  .toolbar .left { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+select { font: inherit; font-weight: 600; font-size: 0.85rem; color: inherit; cursor: pointer; appearance: none; -webkit-appearance: none;
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239d9d9d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.7rem center / 1rem;
+    border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.3rem 2.2rem 0.3rem 0.8rem; transition: .15s; }
+  select:hover { border-color: var(--brand); color: var(--brand); }
+  select option { background: var(--surface); color: var(--fg); }
+  #count { color: var(--muted); }
+
+  /* result cards */
+  .card { display: grid; grid-template-columns: 260px 1fr; gap: 1.2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 1rem; padding: 0.9rem; margin-bottom: 0.9rem; box-shadow: var(--shadow); }
+  .thumb { position: relative; border-radius: 0.7rem; overflow: hidden; background: #000; align-self: start; }
+  .thumb img { width: 100%; display: block; aspect-ratio: 4/3; object-fit: cover; cursor: zoom-in; }
+  .enlarge { position: absolute; top: 0.5rem; right: 0.5rem; width: 2rem; height: 2rem; display: grid; place-items: center; border: 0; border-radius: 0.5rem; background: rgba(255,255,255,.9); color: #000; }
+  .enlarge:hover { background: #fff; }
+  .info { min-width: 0; display: flex; flex-direction: column; gap: 0.8rem; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.8rem; flex-wrap: wrap; }
+  .fname { font-weight: 600; word-break: break-all; }
+  .badge { display: inline-flex; align-items: center; gap: 0.4rem; justify-content: center; text-align: center; white-space: nowrap; width: 17rem; max-width: 100%; padding: 0.25rem 0.7rem; border-radius: 0.375rem; font-size: 0.78rem; font-weight: 800; letter-spacing: .02em; color: color-mix(in srgb, var(--c) 78%, var(--fg)); background: color-mix(in srgb, var(--c) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); }
+  .conf-line { display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.25rem; }
+  .conf-line b { color: var(--fg); font-size: 1.05rem; }
+  .meter { height: 0.6rem; border-radius: 99px; background: var(--border); position: relative; overflow: hidden; }
+  .meter > div { height: 100%; background: var(--c); border-radius: 99px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 1.2rem 2rem; align-items: flex-end; margin-top: auto; }
+  .lbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; margin-bottom: 0.3rem; }
+  .coords { display: flex; align-items: center; gap: 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 0.6rem; padding: 0.25rem 0.3rem 0.25rem 0.7rem; font-family: ui-monospace, "SF Mono", monospace; font-size: 0.85rem; }
+  .coords button { border: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 0.4rem; padding: 0.15rem 0.5rem; font-size: 0.75rem; font-weight: 600; }
+  .coords button:hover { color: var(--brand); border-color: var(--brand); }
+  .nogps { color: var(--muted); }
+  .fb { display: flex; gap: 0.4rem; }
+  .fb button { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.8rem; border-radius: 0.375rem; border: 1px solid var(--border); background: var(--surface); font-weight: 600; font-size: 0.85rem; }
+  .fb button[data-fb=good]:hover { color: var(--green); border-color: var(--green); }
+  .fb button[data-fb=bad]:hover { color: var(--red); border-color: var(--red); }
+
+  .empty { text-align: center; color: var(--muted); padding: 2.5rem 1rem; }
+
+  .exports { margin-top: 1.5rem; padding: 1.1rem 1.2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 1rem; box-shadow: var(--shadow); display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; justify-content: space-between; }
+  .exports h2 { margin: 0; font-size: 1.05rem; }
+  .exports p { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.85rem; }
+  .exports .btns { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+
+  /* legend */
+  details.legend { margin-bottom: 1.2rem; background: var(--surface); border: 1px solid var(--border); border-radius: 0.8rem; padding: 0.7rem 1rem; }
+  details.legend summary { cursor: pointer; font-weight: 700; }
+  .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 0.6rem 1rem; margin-top: 0.7rem; }
+  .legend-grid div { display: flex; flex-direction: column; gap: .2rem; align-items: flex-start; }
+  .legend-grid small { color: var(--muted); }
+
+  /* toast */
+  #toast { position: fixed; left: 50%; bottom: 1.5rem; transform: translate(-50%, 140%); padding: 0.7rem 1.1rem; border-radius: 0.7rem; color: #fff; font-weight: 700; background: #16a34a; box-shadow: 0 6px 24px rgba(0,0,0,.25); transition: transform .25s; z-index: 50; }
+  #toast.bad { background: #dc2626; }
+  #toast.show { transform: translate(-50%, 0); }
+
+  /* viewer */
+  dialog { border: 0; border-radius: 1rem; padding: 0; background: var(--surface); color: var(--fg); width: min(94vw, 1100px); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  dialog::backdrop { background: rgba(0,0,0,.72); }
+  dialog header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.8rem 1rem; border-bottom: 1px solid var(--border); font-weight: 700; }
+  dialog header span { word-break: break-all; }
+  dialog img { width: 100%; max-height: 78vh; object-fit: contain; display: block; background: #000; }
+  dialog footer { padding: 0.7rem 1rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; color: var(--muted); font-size: 0.85rem; }
+  .icon-btn { width: 2.2rem; height: 2.2rem; display: grid; place-items: center; border-radius: 0.6rem; border: 1px solid var(--border); background: var(--surface); }
+  .icon-btn:hover { border-color: var(--brand); color: var(--brand); }
+
+  [hidden] { display: none !important; }
+  @media (max-width: 760px) {
+    .top { padding: 1rem 16px; } main { padding: 1rem 16px 3rem; }
+    .card { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10z"/><path d="M2 21c0-3 1.9-5.6 5-7"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
+  <symbol id="i-exp" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></symbol>
+  <symbol id="i-up2" viewBox="0 0 24 24"><path d="M7 10v11H3V10zM7 10l4-8a3 3 0 0 1 3 3v4h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.6 21H7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M17 14V3h4v11zM17 14l-4 8a3 3 0 0 1-3-3v-4H4a2 2 0 0 1-2-2.3l1.4-8A2 2 0 0 1 5.4 3H17"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-l" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-r" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="top-in">
+    <div class="logo"><svg><use href="#i-leaf"/></svg></div>
+    <div>
+      <h1>Grand Haven Parks Oak-Wilt Detector</h1>
+      <p>4-category oak wilt classification · up to 75 images at a time</p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <details class="legend" open>
+    <summary>Classification guide</summary>
+    <div class="legend-grid" id="legend"></div>
+  </details>
+
+  <section id="drop">
+    <div class="idle">
+      <div class="ico"><svg><use href="#i-up"/></svg></div>
+      <h2>Drop tree photos here</h2>
+      <p>JPG or PNG, up to 75 images. Photos are read from your computer and never uploaded.</p>
+      <button id="browse" class="btn primary" type="button"><svg><use href="#i-up"/></svg>Browse files</button>
+    </div>
+    <div class="busy-box">
+      <div class="busy-row"><div class="spinner"></div><span id="busyText">Analyzing images…</span></div>
+      <div class="track"><div id="bar"></div></div>
+    </div>
+  </section>
+
+  <div id="notices"></div>
+
+  <section id="resultsWrap" hidden>
+    <div class="stats" id="stats"></div>
+
+    <div class="toolbar">
+      <div class="left">
+        <label><span class="lbl" style="display:none">Filter</span>
+          <select id="filter" aria-label="Filter by classification"></select></label>
+        <span id="count"></span>
+      </div>
+      <button id="clear" class="btn" type="button"><svg><use href="#i-x"/></svg>Clear results</button>
+    </div>
+
+    <div id="rows"></div>
+
+    <div class="exports">
+      <div>
+        <h2>Export results</h2>
+        <p id="exportHint">Includes images classified as oak wilt, high chance, or color changes.</p>
+      </div>
+      <div class="btns">
+        <button id="dlCsv" class="btn" type="button"><svg><use href="#i-dl"/></svg>Download CSV</button>
+        <button id="dlGeo" class="btn" type="button"><svg><use href="#i-dl"/></svg>Download GeoJSON</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="dlg">
+  <header><span id="dlgTitle"></span><button id="dlgClose" class="icon-btn" type="button" aria-label="Close"><svg><use href="#i-x"/></svg></button></header>
+  <img id="dlgImg" alt="">
+  <footer>
+    <span id="dlgInfo"></span>
+    <span style="display:flex;gap:.4rem">
+      <button id="dlgPrev" class="icon-btn" type="button" aria-label="Previous"><svg><use href="#i-l"/></svg></button>
+      <button id="dlgNext" class="icon-btn" type="button" aria-label="Next"><svg><use href="#i-r"/></svg></button>
+    </span>
+  </footer>
+</dialog>
+
+<script>
+const CATEGORIES = {
+  "THIS PICTURE HAS OAK WILT":        { min: 99.5, color: "var(--red)",    short: "Oak wilt" },
+  "HIGH CHANCE OF OAK WILT":          { min: 90, max: 99.5, color: "var(--orange)", short: "High chance" },
+  "CHANGES OF COLORS ON TREE LEAVES": { min: 70, max: 90, color: "var(--amber)",  short: "Color changes" },
+  "Not an Oak Wilt":                  { max: 70, color: "var(--green)",  short: "Not oak wilt" },
+};
+const MAX_UPLOAD = 75;
+const NEGATIVE = "Not an Oak Wilt";
+
+const $ = id => document.getElementById(id);
+let results = [];
+let runToken = 0;
+let viewList = [];   // currently displayed (filtered) results, used by the viewer
+let viewIdx = 0;
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const icon = n => `<svg><use href="#i-${n}"/></svg>`;
+const rangeOf = c => c.min !== undefined && c.max !== undefined ? `${c.min}–${c.max}%`
+                   : c.min !== undefined ? `>${c.min}%` : `≤${c.max}%`;
+
+// ---------- static bits ----------
+for (const [name, c] of Object.entries(CATEGORIES)) {
+  $("legend").insertAdjacentHTML("beforeend",
+    `<div><span class="badge" style="--c:${c.color}">${esc(name)}</span><small>Confidence ${rangeOf(c)}</small></div>`);
+}
+for (const opt of ["All", ...Object.keys(CATEGORIES)]) {
+  $("filter").insertAdjacentHTML("beforeend", `<option value="${esc(opt)}">${opt === "All" ? "All classifications" : esc(opt)}</option>`);
+}
+$("filter").addEventListener("change", renderResults);
+
+// ---------- toast ----------
+let toastTimer;
+function toast(text, bad = false) {
+  const t = $("toast");
+  t.textContent = text;
+  t.classList.toggle("bad", bad);
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+// ---------- upload ----------
+// Files are read from disk by Python (pywebview); nothing is uploaded.
+$("browse").addEventListener("click", async () => {
+  const paths = await window.pywebview.api.pick_files();
+  if (paths.length) handlePaths(paths);
+});
+const drop = $("drop");
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+// Dropping anywhere on the window must not navigate to the file
+["dragover", "drop"].forEach(ev => window.addEventListener(ev, e => e.preventDefault()));
+// Python receives the drop event with real file paths and calls handlePaths()
+
+function notice(kind, text) {
+  $("notices").innerHTML = text ? `<div class="msg ${kind}">${esc(text)}</div>` : "";
+}
+
+// `items` is a list of {name, run(seenIds)} where run resolves to a result,
+// {duplicate:true} or {error:true}.
+async function runBatch(items) {
+  notice("", "");
+  if (!items.length) { results = []; runToken++; renderResults(); return; }
+  if (items.length > MAX_UPLOAD) {
+    notice("error", `Cannot analyze more than ${MAX_UPLOAD} images at once. Please select fewer images.`);
+    return;
+  }
+
+  const token = ++runToken;
+  results = [];
+  renderResults();
+
+  const failed = [], seen = new Set();
+  drop.classList.add("busy");
+  $("bar").style.width = "0%";
+
+  let n = 0;
+  for (const item of items) {
+    $("busyText").textContent = `Analyzing image ${n + 1} of ${items.length}…`;
+    try {
+      const data = await item.run(seen);
+      if (token !== runToken) return;
+      if (data.error) failed.push(item.name);
+      else if (!data.duplicate) { seen.add(data.id); results.push(data); }
+    } catch {
+      if (token !== runToken) return;
+      failed.push(item.name);
+    }
+    $("bar").style.width = (++n / items.length * 100) + "%";
+  }
+
+  drop.classList.remove("busy");
+  if (failed.length) notice("warn", "Could not read these images, so they were skipped: " + failed.join(", "));
+  renderResults();
+  if (results.length) $("stats").scrollIntoView({ block: "start" });
+}
+
+function handlePaths(paths) {
+  runBatch(paths.map(p => ({
+    name: p.split(/[\\/]/).pop(),
+    run: seen => window.pywebview.api.analyze(p, [...seen]),
+  })));
+}
+
+$("clear").addEventListener("click", () => { runToken++; results = []; notice("", ""); $("filter").value = "All"; renderResults(); window.scrollTo(0, 0); });
+
+// ---------- results ----------
+function setFilter(v) { $("filter").value = v; renderResults(); }
+
+function renderResults() {
+  $("resultsWrap").hidden = !results.length;
+  if (!results.length) return;
+
+  const sel = $("filter").value;
+  viewList = sel === "All" ? results : results.filter(r => r.classification === sel);
+
+  // summary cards double as filters
+  const counts = {};
+  for (const r of results) counts[r.classification] = (counts[r.classification] || 0) + 1;
+  $("stats").innerHTML =
+    `<button class="stat${sel === "All" ? " active" : ""}" style="--c:var(--brand)" data-filter="All"><b>${results.length}</b><span>All images</span><small>Total analyzed</small></button>` +
+    Object.entries(CATEGORIES).map(([name, c]) =>
+      `<button class="stat${sel === name ? " active" : ""}" style="--c:${c.color}" data-filter="${esc(name)}"><b>${counts[name] || 0}</b><span>${esc(c.short)}</span><small>${rangeOf(c)}</small></button>`
+    ).join("");
+
+  $("count").textContent = `Showing ${viewList.length} of ${results.length}`;
+
+  $("rows").innerHTML = viewList.length ? viewList.map((r, i) => {
+    const cat = CATEGORIES[r.classification] || CATEGORIES[NEGATIVE];
+    const g = r.gps && `${r.gps[0].toFixed(5)}, ${r.gps[1].toFixed(5)}`;
+    return `
+      <article class="card" style="--c:${cat.color}">
+        <div class="thumb">
+          <img src="${r.thumbnail}" alt="${esc(r.filename)}" data-open="${i}">
+          <button class="enlarge" type="button" title="Enlarge" aria-label="Enlarge ${esc(r.filename)}" data-open="${i}">${icon("exp")}</button>
+        </div>
+        <div class="info">
+          <div class="head">
+            <div class="fname">${esc(r.filename)}</div>
+            <span class="badge">${esc(r.classification)}</span>
+          </div>
+          <div>
+            <div class="conf-line"><span>Confidence of oak wilt</span><b>${r.confidence.toFixed(2)}%</b></div>
+            <div class="meter"><div style="width:${Math.min(100, Math.max(0, r.confidence))}%"></div></div>
+          </div>
+          <div class="meta">
+            <div>
+              <div class="lbl">Coordinates</div>
+              ${g ? `<div class="coords"><span>${g}</span><button type="button" data-copy="${g}">Copy</button></div>` : `<span class="nogps">No GPS data</span>`}
+            </div>
+            <div>
+              <div class="lbl">Was this prediction right?</div>
+              <div class="fb">
+                <button type="button" data-fb="good" title="Correct prediction">${icon("up2")}Good</button>
+                <button type="button" data-fb="bad" title="Incorrect prediction">${icon("down")}Bad</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>`;
+  }).join("") : `<div class="empty">No images in this category.</div>`;
+
+  const hasPos = !!buildCsv();
+  $("dlCsv").disabled = !hasPos;
+  $("dlGeo").disabled = !buildGeo();
+  $("exportHint").textContent = hasPos
+    ? "Includes images classified as oak wilt, high chance, or color changes. GeoJSON also needs GPS data."
+    : "Nothing to export: no images were flagged as possible oak wilt.";
+}
+
+$("stats").addEventListener("click", e => {
+  const b = e.target.closest("[data-filter]");
+  if (b) setFilter(b.dataset.filter);
+});
+
+$("rows").addEventListener("click", e => {
+  const open = e.target.closest("[data-open]");
+  if (open) return openViewer(+open.dataset.open);
+
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.dataset.copy) {
+    navigator.clipboard?.writeText(t.dataset.copy);
+    t.textContent = "Copied";
+    setTimeout(() => (t.textContent = "Copy"), 1500);
+  } else if (t.dataset.fb) {
+    const bad = t.dataset.fb === "bad";
+    toast(`Thanks! Prediction was ${bad ? "incorrect" : "correct"}.`, bad);
+  }
+});
+
+// ---------- viewer ----------
+function openViewer(i) {
+  viewIdx = i;
+  const r = viewList[i];
+  $("dlgTitle").textContent = r.filename;
+  $("dlgImg").src = r.thumbnail;
+  $("dlgInfo").textContent = `${i + 1} of ${viewList.length} · ${r.classification} · ${r.confidence.toFixed(2)}%`;
+  if (!$("dlg").open) $("dlg").showModal();
+}
+const step = d => openViewer((viewIdx + d + viewList.length) % viewList.length);
+$("dlgPrev").addEventListener("click", () => step(-1));
+$("dlgNext").addEventListener("click", () => step(1));
+$("dlgClose").addEventListener("click", () => $("dlg").close());
+$("dlg").addEventListener("click", e => { if (e.target === $("dlg")) $("dlg").close(); });
+document.addEventListener("keydown", e => {
+  if (!$("dlg").open) return;
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "ArrowRight") step(1);
+});
+
+// ---------- export ----------
+function csvCell(v) {
+  v = String(v);
+  return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+
+function buildCsv() {
+  const pos = results.filter(r => r.classification !== NEGATIVE);
+  if (!pos.length) return null;
+  const lines = ["filename,classification,confidence,latitude,longitude"];
+  for (const r of pos) {
+    lines.push([r.filename, r.classification, r.confidence, r.gps ? r.gps[0] : "", r.gps ? r.gps[1] : ""].map(csvCell).join(","));
+  }
+  return lines.join("\n") + "\n";
+}
+
+function buildGeo() {
+  const pos = results.filter(r => r.classification !== NEGATIVE && r.gps);
+  if (!pos.length) return null;
+  return JSON.stringify({
+    type: "FeatureCollection",
+    features: pos.map(r => ({
+      type: "Feature",
+      properties: { filename: r.filename, confidence: r.confidence.toFixed(2) + "%", classification: r.classification },
+      geometry: { type: "Point", coordinates: [r.gps[1], r.gps[0]] },
+    })),
+  }, null, 2);
+}
+
+function timestamp() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+async function download(text, name) {
+  const ok = await window.pywebview.api.save_file(text, name);
+  if (ok) toast("File saved.");
+}
+
+$("dlCsv").addEventListener("click", () => {
+  const d = buildCsv();
+  if (d) download(d, `oak_wilt_results_${timestamp()}.csv`);
+});
+$("dlGeo").addEventListener("click", () => {
+  const d = buildGeo();
+  if (d) download(d, `oak_wilt_map_${timestamp()}.geojson`);
+});
+</script>
+</body>
+</html>
