@@ -1,5 +1,19 @@
-pywebview
-tensorflow
-opencv-python-headless
-Pillow
-numpy
+# Core
+# oak_wilt_3.h5 was saved with Keras 2.14; TensorFlow 2.16+ ships Keras 3, so stay below it.
+tensorflow>=2.14.0,<2.16.0
+numpy>=1.26.0,<2.0.0
+pillow>=10.2.0
+
+# Image decoding (4.12+ requires numpy 2)
+opencv-python-headless>=4.9.0,<4.12.0
+
+# Desktop window
+pywebview>=5.0,<7.0
+
+# macOS + Python 3.9 only: pyobjc 12 dropped 3.9, and old pip versions pick the yanked 12.0
+pyobjc-core<12; sys_platform == "darwin" and python_version < "3.10"
+pyobjc-framework-Cocoa<12; sys_platform == "darwin" and python_version < "3.10"
+pyobjc-framework-Quartz<12; sys_platform == "darwin" and python_version < "3.10"
+pyobjc-framework-WebKit<12; sys_platform == "darwin" and python_version < "3.10"
+pyobjc-framework-Security<12; sys_platform == "darwin" and python_version < "3.10"
+pyobjc-framework-UniformTypeIdentifiers<12; sys_platform == "darwin" and python_version < "3.10"
