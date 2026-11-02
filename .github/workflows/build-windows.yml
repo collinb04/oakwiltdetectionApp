@@ -1,0 +1,56 @@
+name: Build Windows installer
+
+on:
+  push:
+    tags: ["v*"]        # e.g. git tag v1.0.0 && git push origin v1.0.0
+  workflow_dispatch:    # or run it by hand from the Actions tab
+
+permissions:
+  contents: write       # needed to attach the installer to a release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true     # pull the real model, not the LFS pointer
+
+      - name: Check the model is not an LFS pointer
+        shell: pwsh
+        run: |
+          $size = (Get-Item src/oak_wilt_3.h5).Length
+          if ($size -lt 1MB) { throw "src/oak_wilt_3.h5 is only $size bytes; LFS checkout failed" }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build app with PyInstaller
+        run: pyinstaller --noconfirm --clean OakWiltDetector.spec
+
+      - name: Build installer with Inno Setup
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME.TrimStart("v") } else { "0.0.0-dev" }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DMyAppVersion=$version" installer\OakWiltDetector.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OakWiltDetector-Setup
+          path: dist/OakWiltDetector-Setup-*.exe
+
+      - name: Attach installer to GitHub release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/OakWiltDetector-Setup-*.exe

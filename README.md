@@ -22,7 +22,7 @@ pip install -r requirements.txt
 python src/desktop.py
 ```
 
-Click **Browse files** or drag JPG/PNG images onto the window (max 75). Duplicate photos are skipped by content. Filter results, mark predictions Good/Bad, and export CSV or GeoJSON with a native Save dialog.
+Click **Browse files** or drag JPG/PNG images onto the window (max 1000). Duplicate photos are skipped by content. Filter results, mark predictions Good/Bad, and export CSV or GeoJSON with a native Save dialog.
 
 ## Package for users
 
@@ -88,6 +88,19 @@ Notes:
 
 * The window uses the Microsoft Edge WebView2 runtime. It is preinstalled on Windows 11 and most up-to-date Windows 10 machines; otherwise install it from Microsoft.
 * The exe is not signed, so SmartScreen shows "Windows protected your PC". Users click **More info → Run anyway**.
+
+### Windows installer via GitHub Actions
+
+No Windows machine needed. `.github/workflows/build-windows.yml` builds the app on GitHub's Windows runners and wraps it with Inno Setup (`installer/OakWiltDetector.iss`) into `OakWiltDetector-Setup-<version>.exe`. The installer adds a Start-menu entry, an optional desktop shortcut, and an uninstaller, and does not require admin rights.
+
+* **Release:** push a version tag. The installer is attached to a GitHub release for that tag.
+
+  ```bash
+  git tag v1.0.0
+  git push origin v1.0.0
+  ```
+
+* **Test build:** on GitHub, open **Actions → Build Windows installer → Run workflow**. Download the installer from the run's **Artifacts**.
 
 ### Troubleshooting
 

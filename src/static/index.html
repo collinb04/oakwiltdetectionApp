@@ -164,7 +164,7 @@ select { font: inherit; font-weight: 600; font-size: 0.85rem; color: inherit; cu
     <div class="logo"><svg><use href="#i-leaf"/></svg></div>
     <div>
       <h1>Grand Haven Parks Oak-Wilt Detector</h1>
-      <p>4-category oak wilt classification · up to 75 images at a time</p>
+      <p>4-category oak wilt classification · up to 1000 images at a time</p>
     </div>
   </div>
 </header>
@@ -179,7 +179,7 @@ select { font: inherit; font-weight: 600; font-size: 0.85rem; color: inherit; cu
     <div class="idle">
       <div class="ico"><svg><use href="#i-up"/></svg></div>
       <h2>Drop tree photos here</h2>
-      <p>JPG or PNG, up to 75 images. Photos are read from your computer and never uploaded.</p>
+      <p>JPG or PNG, up to 1000 images. Photos are read from your computer and never uploaded.</p>
       <button id="browse" class="btn primary" type="button"><svg><use href="#i-up"/></svg>Browse files</button>
     </div>
     <div class="busy-box">
@@ -239,7 +239,7 @@ const CATEGORIES = {
   "CHANGES OF COLORS ON TREE LEAVES": { min: 70, max: 90, color: "var(--amber)",  short: "Color changes" },
   "Not an Oak Wilt":                  { max: 70, color: "var(--green)",  short: "Not oak wilt" },
 };
-const MAX_UPLOAD = 75;
+const MAX_UPLOAD = 1000;
 const NEGATIVE = "Not an Oak Wilt";
 
 const $ = id => document.getElementById(id);
