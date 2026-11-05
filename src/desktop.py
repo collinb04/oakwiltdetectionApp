@@ -4,7 +4,7 @@ import os
 
 import webview
 
-from detector import STATIC_DIR, file_id, get_model, process_image
+from detector import STATIC_DIR, file_id, get_model, process_image, view_image
 
 IMAGE_EXTS = (".jpg", ".jpeg", ".png")
 
@@ -29,9 +29,16 @@ class Api:
             fid = file_id(img_bytes)
             if fid in seen:
                 return {"duplicate": True}
-            return {"id": fid, "filename": name, **process_image(img_bytes)}
+            return {"id": fid, "filename": name, "path": path, **process_image(img_bytes)}
         except Exception:
             return {"error": True, "filename": name}
+
+    def view_image(self, path):
+        """Sharper copy of an analyzed image for the zoomable viewer, or None if it can't be read."""
+        try:
+            return view_image(path)
+        except Exception:
+            return None
 
     def save_file(self, text, default_name):
         kind = webview.FileDialog.SAVE if hasattr(webview, "FileDialog") else webview.SAVE_DIALOG

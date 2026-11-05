@@ -20,6 +20,7 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 IMG_SIZE = 256
 THUMB_WIDTH = 600
+VIEW_WIDTH = 2400  # enlarged viewer: sharp enough to zoom, small enough to pass to the UI quickly
 
 _model = None
 model_lock = threading.Lock()
@@ -84,13 +85,8 @@ def process_image(img_bytes):
     if img is None:
         raise ValueError("Invalid image")
 
-    # Small JPEG thumbnail for display; the full-size upload is never kept
-    h, w = img.shape[:2]
-    if w > THUMB_WIDTH:
-        thumb = cv2.resize(img, (THUMB_WIDTH, int(h * THUMB_WIDTH / w)), interpolation=cv2.INTER_AREA)
-    else:
-        thumb = img
-    _, thumb_buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    # Small JPEG thumbnail for display; the full-size image is never kept
+    thumbnail = jpeg_data_url(img, THUMB_WIDTH, 85)
 
     img = cv2.resize(img, (IMG_SIZE, IMG_SIZE)).astype(np.float32) / 255.0
     model = get_model()
@@ -101,8 +97,27 @@ def process_image(img_bytes):
         "classification": classify_prediction(prediction),
         "confidence": prediction * 100,
         "gps": get_gps_data(img_bytes),
-        "thumbnail": "data:image/jpeg;base64," + base64.b64encode(thumb_buf.tobytes()).decode("ascii"),
+        "thumbnail": thumbnail,
     }
+
+
+def jpeg_data_url(img, max_width, quality):
+    """Downscale `img` to at most `max_width` wide and return it as a JPEG data URL."""
+    h, w = img.shape[:2]
+    if w > max_width:
+        img = cv2.resize(img, (max_width, int(h * max_width / w)), interpolation=cv2.INTER_AREA)
+    _, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    return "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode("ascii")
+
+
+def view_image(path):
+    """Larger copy of the image on disk for the zoomable viewer."""
+    # Read bytes ourselves: cv2.imread can't open non-ASCII paths on Windows
+    with open(path, "rb") as f:
+        img = cv2.imdecode(np.frombuffer(f.read(), np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError("Invalid image")
+    return jpeg_data_url(img, VIEW_WIDTH, 90)
 
 
 def file_id(img_bytes):

@@ -132,8 +132,13 @@ select { font: inherit; font-weight: 600; font-size: 0.85rem; color: inherit; cu
   dialog::backdrop { background: rgba(0,0,0,.72); }
   dialog header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.8rem 1rem; border-bottom: 1px solid var(--border); font-weight: 700; }
   dialog header span { word-break: break-all; }
-  dialog img { width: 100%; max-height: 78vh; object-fit: contain; display: block; background: #000; }
-  dialog footer { padding: 0.7rem 1rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; color: var(--muted); font-size: 0.85rem; }
+  .zoom { overflow: hidden; background: #000; touch-action: none; cursor: zoom-in; }
+  .zoom.zoomed { cursor: grab; }
+  .zoom.dragging { cursor: grabbing; }
+  .zoom img { width: 100%; height: 78vh; object-fit: contain; display: block; transform-origin: 0 0; user-select: none; -webkit-user-drag: none; }
+  .zoom-ctl { display: flex; align-items: center; gap: 0.4rem; }
+  .zoom-ctl output { min-width: 3.2rem; text-align: center; font-variant-numeric: tabular-nums; }
+  dialog footer { padding: 0.7rem 1rem; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; color: var(--muted); font-size: 0.85rem; }
   .icon-btn { width: 2.2rem; height: 2.2rem; display: grid; place-items: center; border-radius: 0.6rem; border: 1px solid var(--border); background: var(--surface); }
   .icon-btn:hover { border-color: var(--brand); color: var(--brand); }
 
@@ -157,6 +162,9 @@ select { font: inherit; font-weight: 600; font-size: 0.85rem; color: inherit; cu
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
   <symbol id="i-l" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
   <symbol id="i-r" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
 </svg>
 
 <header class="top">
@@ -222,9 +230,15 @@ select { font: inherit; font-weight: 600; font-size: 0.85rem; color: inherit; cu
 
 <dialog id="dlg">
   <header><span id="dlgTitle"></span><button id="dlgClose" class="icon-btn" type="button" aria-label="Close"><svg><use href="#i-x"/></svg></button></header>
-  <img id="dlgImg" alt="">
+  <div id="zoom" class="zoom"><img id="dlgImg" alt="" draggable="false"></div>
   <footer>
     <span id="dlgInfo"></span>
+    <span class="zoom-ctl">
+      <button id="zoomOut" class="icon-btn" type="button" aria-label="Zoom out"><svg><use href="#i-minus"/></svg></button>
+      <output id="zoomPct">100%</output>
+      <button id="zoomIn" class="icon-btn" type="button" aria-label="Zoom in"><svg><use href="#i-plus"/></svg></button>
+      <button id="zoomReset" class="icon-btn" type="button" aria-label="Reset zoom" title="Reset zoom (0)"><svg><use href="#i-fit"/></svg></button>
+    </span>
     <span style="display:flex;gap:.4rem">
       <button id="dlgPrev" class="icon-btn" type="button" aria-label="Previous"><svg><use href="#i-l"/></svg></button>
       <button id="dlgNext" class="icon-btn" type="button" aria-label="Next"><svg><use href="#i-r"/></svg></button>
@@ -425,14 +439,93 @@ $("rows").addEventListener("click", e => {
 });
 
 // ---------- viewer ----------
+// Sharper copies for the viewer, loaded from disk on demand. Only a few are kept so 1000 results stay light.
+const viewCache = new Map();
+const VIEW_CACHE_MAX = 6;
+
+async function loadViewImage(r) {
+  if (viewCache.has(r.id)) return viewCache.get(r.id);
+  const url = r.path ? await window.pywebview.api.view_image(r.path) : null;
+  if (url) {
+    viewCache.set(r.id, url);
+    if (viewCache.size > VIEW_CACHE_MAX) viewCache.delete(viewCache.keys().next().value);
+  }
+  return url;
+}
+
 function openViewer(i) {
   viewIdx = i;
   const r = viewList[i];
   $("dlgTitle").textContent = r.filename;
-  $("dlgImg").src = r.thumbnail;
+  $("dlgImg").src = viewCache.get(r.id) || r.thumbnail;
   $("dlgInfo").textContent = `${i + 1} of ${viewList.length} · ${r.classification} · ${r.confidence.toFixed(2)}%`;
+  resetZoom();
   if (!$("dlg").open) $("dlg").showModal();
+  loadViewImage(r).then(url => { if (url && viewList[viewIdx] === r) $("dlgImg").src = url; }).catch(() => {});
 }
+
+// Zoom and pan: scale about the top-left corner, then translate; pan is clamped so the image always fills the frame.
+const ZOOM_MAX = 8;
+let zoom = 1, panX = 0, panY = 0;
+
+function applyZoom() {
+  const { clientWidth: w, clientHeight: h } = $("zoom");
+  panX = Math.min(0, Math.max(w - w * zoom, panX));
+  panY = Math.min(0, Math.max(h - h * zoom, panY));
+  $("dlgImg").style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  $("zoom").classList.toggle("zoomed", zoom > 1);
+  $("zoomPct").textContent = Math.round(zoom * 100) + "%";
+}
+
+// Zoom to `next`, keeping the point (x, y) inside the frame fixed. Defaults to the centre.
+function zoomTo(next, x, y) {
+  const { clientWidth: w, clientHeight: h } = $("zoom");
+  x ??= w / 2; y ??= h / 2;
+  next = Math.min(ZOOM_MAX, Math.max(1, next));
+  panX = x - (x - panX) * (next / zoom);
+  panY = y - (y - panY) * (next / zoom);
+  zoom = next;
+  applyZoom();
+}
+
+function resetZoom() { zoom = 1; panX = panY = 0; applyZoom(); }
+
+function framePoint(e) {
+  const box = $("zoom").getBoundingClientRect();
+  return [e.clientX - box.left, e.clientY - box.top];
+}
+
+$("zoom").addEventListener("wheel", e => {
+  e.preventDefault();
+  // Trackpad pinch arrives as a wheel event with ctrlKey and small deltas, so scale by delta rather than a fixed step.
+  zoomTo(zoom * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002)), ...framePoint(e));
+}, { passive: false });
+
+$("zoom").addEventListener("dblclick", e => {
+  if (zoom > 1) resetZoom();
+  else zoomTo(3, ...framePoint(e));
+});
+
+let drag = null;
+$("zoom").addEventListener("pointerdown", e => {
+  if (zoom === 1 || e.button !== 0) return;
+  drag = { x: e.clientX - panX, y: e.clientY - panY };
+  $("zoom").setPointerCapture(e.pointerId);
+  $("zoom").classList.add("dragging");
+});
+$("zoom").addEventListener("pointermove", e => {
+  if (!drag) return;
+  panX = e.clientX - drag.x;
+  panY = e.clientY - drag.y;
+  applyZoom();
+});
+for (const ev of ["pointerup", "pointercancel"]) {
+  $("zoom").addEventListener(ev, () => { drag = null; $("zoom").classList.remove("dragging"); });
+}
+
+$("zoomIn").addEventListener("click", () => zoomTo(zoom * 1.5));
+$("zoomOut").addEventListener("click", () => zoomTo(zoom / 1.5));
+$("zoomReset").addEventListener("click", resetZoom);
 const step = d => openViewer((viewIdx + d + viewList.length) % viewList.length);
 $("dlgPrev").addEventListener("click", () => step(-1));
 $("dlgNext").addEventListener("click", () => step(1));
@@ -442,6 +535,9 @@ document.addEventListener("keydown", e => {
   if (!$("dlg").open) return;
   if (e.key === "ArrowLeft") step(-1);
   if (e.key === "ArrowRight") step(1);
+  if (e.key === "+" || e.key === "=") zoomTo(zoom * 1.5);
+  if (e.key === "-") zoomTo(zoom / 1.5);
+  if (e.key === "0") resetZoom();
 });
 
 // ---------- export ----------
