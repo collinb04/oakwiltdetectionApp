@@ -35,6 +35,13 @@ jobs:
       - name: Build app with PyInstaller
         run: pyinstaller --noconfirm --clean OakWiltDetector.spec
 
+      - name: Check the MSVC runtime is bundled
+        shell: pwsh
+        run: |
+          foreach ($dll in "msvcp140.dll", "msvcp140_1.dll", "vcruntime140.dll", "vcruntime140_1.dll") {
+            if (-not (Test-Path "dist/OakWiltDetector/_internal/$dll")) { throw "$dll missing from the build" }
+          }
+
       - name: Build installer with Inno Setup
         shell: pwsh
         run: |

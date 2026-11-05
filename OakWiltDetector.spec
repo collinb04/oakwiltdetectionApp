@@ -1,4 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+import sys
+
 from PyInstaller.utils.hooks import collect_all
 
 datas = [('src/oak_wilt_3.h5', 'src'), ('src/static', 'src/static')]
@@ -6,6 +9,12 @@ binaries = []
 hiddenimports = []
 tmp_ret = collect_all('tensorflow')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
+# Windows: TensorFlow needs the MSVC runtime, which clean machines often lack. Ship it with the app.
+if sys.platform == 'win32':
+    system32 = os.path.join(os.environ['SystemRoot'], 'System32')
+    for dll in ('msvcp140.dll', 'msvcp140_1.dll', 'vcruntime140.dll', 'vcruntime140_1.dll'):
+        binaries.append((os.path.join(system32, dll), '.'))
 
 
 a = Analysis(
